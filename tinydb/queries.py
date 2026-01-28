@@ -80,7 +80,7 @@ class QueryInstance:
         Evaluate the query to check if it matches a specified value.
 
         :param value: The value to check.
-        :return: Whether the value matches this query.
+        :return: Wether the value matchs this query.
         """
         return self._test(value)
 
