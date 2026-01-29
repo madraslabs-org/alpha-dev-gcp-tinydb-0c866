@@ -1,5 +1,6 @@
-import pytest  # type: ignore
 import re
+
+import pytest
 
 from tinydb import where
 
