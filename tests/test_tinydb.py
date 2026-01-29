@@ -1,7 +1,7 @@
 import re
 from collections.abc import Mapping
 
-import pytest
+import pytest  # type: ignore
 
 from tinydb import TinyDB, where, Query
 from tinydb.middlewares import Middleware, CachingMiddleware
