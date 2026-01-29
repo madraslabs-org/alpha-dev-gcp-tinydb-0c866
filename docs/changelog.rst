@@ -7,10 +7,36 @@ Version Numbering
 TinyDB follows the SemVer versioning guidelines. For more information,
 see `semver.org <http://semver.org/>`_
 
+.. note:: When new methods are added to the ``Query`` API, this may
+          result in breaking existing code that uses the property syntax
+          to access document fields (e.g. ``Query().some.nested.field``)
+          where the field name is equal to the newly added query method.
+          Thus, breaking changes may occur in feature releases even though
+          they don't change the public API in a backwards-incompatible
+          manner.
+
+          To prevent this from happening, one can use the dict access
+          syntax (``Query()['some']['nested']['field']``) that will
+          not break even when new methods are added to the ``Query`` API.
+
 unreleased
 ^^^^^^^^^^
 
 - *nothing yet*
+
+v4.5.2 (2021-09-23)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix: Make ``Table.delete()``'s argument priorities consistent with
+  other table methods. This means that if you pass both ``cond`` as
+  well as ``doc_ids`` to ``Table.delete()``, the latter will be prefered
+  (see `issue 424 <https://github.com/msiemens/tinydb/issues/424>`__)
+
+v4.5.1 (2021-07-17)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix: Correctly install ``typing-extensions`` on Python 3.7
+  (see `issue 413 <https://github.com/msiemens/tinydb/issues/413>`__)
 
 v4.5.0 (2021-06-25)
 ^^^^^^^^^^^^^^^^^^^
