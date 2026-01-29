@@ -52,7 +52,7 @@ projects on the `discussion forum <http://forum.m-siemens.de/.>`_.
 Supported Python Versions
 *************************
 
-TinyDB has been tested with Python 3.6 - 3.9 and PyPy3.
+TinyDB has been tested with Python 3.6 - 3.10 and PyPy3.
 
 Example Code
 ************
@@ -81,6 +81,10 @@ Query Language
     >>> # Combine two queries with logical or
     >>> db.search((User.name == 'John') | (User.name == 'Bob'))
     [{'name': 'John', 'age': 22}, {'name': 'John', 'age': 37}, {'name': 'Bob', 'age': 42}]
+
+    >>> # Apply transformation to field with `map`
+    >>> db.search((User.age.map(lambda x: x + x) == 44))
+    >>> [{'name': 'John', 'age': 22}]
 
     >>> # More possible comparisons:  !=  <  >  <=  >=
     >>> # More possible checks: where(...).matches(regex), where(...).test(your_test_func)
