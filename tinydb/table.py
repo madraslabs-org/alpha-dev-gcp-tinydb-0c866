@@ -50,7 +50,7 @@ class Table:
         once a threshold is reached.
 
         The query cache is updated on every search operation. When writing
-        data, the whole cache is discareded as the query results may have
+        data, the whole cache is discarded as the query results may have
         changed.
 
     .. admonition:: Customization
@@ -232,8 +232,24 @@ class Table:
         # Perform the search by applying the query to all documents
         docs = [doc for doc in self if cond(doc)]
 
-        # Update the query cache
-        self._query_cache[cond] = docs[:]
+        # Only cache cacheable queries.
+        #
+        # This weird `getattr` dance is needed to make MyPy happy as
+        # it doesn't know that a query might have a `is_cacheable` method
+        # that is not declared in the `QueryLike` protocol due to it being
+        # optional.
+        # See: https://github.com/python/mypy/issues/1424
+        #
+        # Note also that by default we expect custom query objects to be
+        # cacheable (which means they need to have a stable hash value).
+        # This is to keep consistency with TinyDB's behavior before
+        # `is_cacheable` was introduced which assumed that all queries
+        # are cacheable.
+        is_cacheable: Callable[[], bool] = getattr(cond, 'is_cacheable',
+                                                   lambda: True)
+        if is_cacheable():
+            # Update the query cache
+            self._query_cache[cond] = docs[:]
 
         return docs
 
@@ -494,6 +510,25 @@ class Table:
         :param doc_ids: a list of document IDs
         :returns: a list containing the removed documents' ID
         """
+        if doc_ids is not None:
+            # This function returns the list of IDs for the documents that have
+            # been removed. When removing documents identified by a set of
+            # document IDs, it's this list of document IDs we need to return
+            # later.
+            # We convert the document ID iterator into a list so we can both
+            # use the document IDs to remove the specified documents as well as
+            # to return the list of affected document IDs
+            removed_ids = list(doc_ids)
+
+            def updater(table: dict):
+                for doc_id in removed_ids:
+                    table.pop(doc_id)
+
+            # Perform the remove operation
+            self._update_table(updater)
+
+            return removed_ids
+
         if cond is not None:
             removed_ids = []
 
@@ -518,25 +553,6 @@ class Table:
 
                         # Remove document from the table
                         table.pop(doc_id)
-
-            # Perform the remove operation
-            self._update_table(updater)
-
-            return removed_ids
-
-        if doc_ids is not None:
-            # This function returns the list of IDs for the documents that have
-            # been removed. When removing documents identified by a set of
-            # document IDs, it's this list of document IDs we need to return
-            # later.
-            # We convert the document ID iterator into a list so we can both
-            # use the document IDs to remove the specified documents as well as
-            # to return the list of affected document IDs
-            removed_ids = list(doc_ids)
-
-            def updater(table: dict):
-                for doc_id in removed_ids:
-                    table.pop(doc_id)
 
             # Perform the remove operation
             self._update_table(updater)
