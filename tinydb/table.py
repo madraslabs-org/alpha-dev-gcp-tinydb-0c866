@@ -160,8 +160,10 @@ class Table:
 
         # Now, we update the table and add the document
         def updater(table: dict):
-            assert doc_id not in table, 'doc_id '+str(doc_id)+' already exists'
-
+            if doc_id in table:
+                raise ValueError(f'Document with ID {str(doc_id)} '
+                                 f'already exists')
+                
             # By calling ``dict(document)`` we convert the data we got to a
             # ``dict`` instance even if it was a different class that
             # implemented the ``Mapping`` interface
@@ -183,17 +185,32 @@ class Table:
 
         def updater(table: dict):
             for document in documents:
+
                 # Make sure the document implements the ``Mapping`` interface
                 if not isinstance(document, Mapping):
                     raise ValueError('Document is not a Mapping')
 
-                # Get the document ID for this document and store it so we
-                # can return all document IDs later
+                if isinstance(document, Document):
+                    # Check if document does not override an existing document
+                    if document.doc_id in table:
+                        raise ValueError(
+                            f'Document with ID {str(document.doc_id)} '
+                            f'already exists'
+                        )
+
+                    # Store the doc_id, so we can return all document IDs
+                    # later. Then save the document with its doc_id and
+                    # skip the rest of the current loop
+                    doc_id = document.doc_id
+                    doc_ids.append(doc_id)
+                    table[doc_id] = dict(document)
+                    continue
+
+                # Generate new document ID for this document
+                # Store the doc_id, so we can return all document IDs
+                # later, then save the document with the new doc_id
                 doc_id = self._get_next_id()
                 doc_ids.append(doc_id)
-
-                # Convert the document to a ``dict`` (see Table.insert) and
-                # store it
                 table[doc_id] = dict(document)
 
         # See below for details on ``Table._update``
@@ -229,8 +246,14 @@ class Table:
         if cached_results is not None:
             return cached_results[:]
 
-        # Perform the search by applying the query to all documents
-        docs = [doc for doc in self if cond(doc)]
+        # Perform the search by applying the query to all documents.
+        # Then, only if the document matches the query, convert it
+        # to the document class and document ID class.
+        docs = [
+            self.document_class(doc, self.document_id_class(doc_id))
+            for doc_id, doc in self._read_table().items()
+            if cond(doc)
+        ]
 
         # Only cache cacheable queries.
         #
@@ -272,7 +295,7 @@ class Table:
         if doc_id is not None:
             # Retrieve a document specified by its ID
             table = self._read_table()
-            raw_doc = table.get(doc_id, None)
+            raw_doc = table.get(str(doc_id), None)
 
             if raw_doc is None:
                 return None
@@ -282,9 +305,16 @@ class Table:
 
         elif cond is not None:
             # Find a document specified by a query
-            for doc in self:
+            # The trailing underscore in doc_id_ is needed so MyPy
+            # doesn't think that `doc_id_` (which is a string) needs
+            # to have the same type as `doc_id` which is this function's
+            # parameter and is an optional `int`.
+            for doc_id_, doc in self._read_table().items():
                 if cond(doc):
-                    return doc
+                    return self.document_class(
+                        doc,
+                        self.document_id_class(doc_id_)
+                    )
 
             return None
 
@@ -593,20 +623,7 @@ class Table:
         Count the total number of documents in this table.
         """
 
-        # Using self._read_table() will convert all documents into
-        # the document class. But for counting the number of documents
-        # this conversion is not necessary, thus we read the storage
-        # directly here
-
-        tables = self._storage.read()
-
-        if tables is None:
-            return 0
-
-        try:
-            return len(tables[self.name])
-        except KeyError:
-            return 0
+        return len(self._read_table())
 
     def __iter__(self) -> Iterator[Document]:
         """
@@ -618,7 +635,7 @@ class Table:
         # Iterate all documents and their IDs
         for doc_id, doc in self._read_table().items():
             # Convert documents to the document class
-            yield self.document_class(doc, doc_id)
+            yield self.document_class(doc, self.document_id_class(doc_id))
 
     def _get_next_id(self):
         """
@@ -655,14 +672,13 @@ class Table:
 
         return next_id
 
-    def _read_table(self) -> Dict[int, Mapping]:
+    def _read_table(self) -> Dict[str, Mapping]:
         """
         Read the table data from the underlying storage.
 
-        Here we read the data from the underlying storage and convert all
-        IDs to the document ID class. Documents themselves are NOT yet
-        transformed into the document class, we may not want to convert
-        *all* documents when returning only one document for example.
+        Documents and doc_ids are NOT yet transformed, as 
+        we may not want to convert *all* documents when returning
+        only one document for example.
         """
 
         # Retrieve the tables from the storage
@@ -679,12 +695,7 @@ class Table:
             # The table does not exist yet, so it is empty
             return {}
 
-        # Convert all document IDs to the correct document ID class and return
-        # the table data dict
-        return {
-            self.document_id_class(doc_id): doc
-            for doc_id, doc in table.items()
-        }
+        return table
 
     def _update_table(self, updater: Callable[[Dict[int, Mapping]], None]):
         """
